@@ -1,0 +1,9 @@
+.git
+.next
+node_modules
+**/__pycache__
+**/.venv
+**/.env
+apps/dashboard/.next
+**/*.pyc
+README.md

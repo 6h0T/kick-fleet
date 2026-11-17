@@ -1,0 +1,178 @@
+name: kick-fleet
+
+x-worker: &worker
+  build:
+    context: .
+    dockerfile: infrastructure/docker/Dockerfile.worker
+  restart: unless-stopped
+  shm_size: "1gb"
+  env_file:
+    - .env
+  environment:
+    DISPLAY: ":99"
+    CONTROLLER_URL: http://controller:8000
+    REDIS_URL: redis://redis:6379/0
+    KICK_BASE_URL: ${KICK_BASE_URL:-https://kick.com}
+    SCREEN_WIDTH: ${SCREEN_WIDTH:-1920}
+    SCREEN_HEIGHT: ${SCREEN_HEIGHT:-1080}
+    API_TOKEN: ${API_TOKEN:-}
+  depends_on:
+    controller:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  networks:
+    - fleet
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-kick}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kick}
+      POSTGRES_DB: ${POSTGRES_DB:-kickfleet}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kick} -d ${POSTGRES_DB:-kickfleet}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - fleet
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - fleet
+
+  controller:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.controller
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://kick:kick@postgres:5432/kickfleet}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      FERNET_KEY: ${FERNET_KEY}
+      API_TOKEN: ${API_TOKEN:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - fleet
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.dashboard
+      args:
+        NEXT_PUBLIC_CONTROLLER_URL: ""
+        NEXT_PUBLIC_WS_URL: ""
+    restart: unless-stopped
+    environment:
+      CONTROLLER_INTERNAL_URL: http://controller:8000
+    depends_on:
+      controller:
+        condition: service_healthy
+    networks:
+      - fleet
+
+  worker-01:
+    <<: *worker
+    container_name: kick-worker-01
+    environment:
+      DISPLAY: ":99"
+      CONTROLLER_URL: http://controller:8000
+      REDIS_URL: redis://redis:6379/0
+      KICK_BASE_URL: ${KICK_BASE_URL:-https://kick.com}
+      SCREEN_WIDTH: ${SCREEN_WIDTH:-1920}
+      SCREEN_HEIGHT: ${SCREEN_HEIGHT:-1080}
+      API_TOKEN: ${API_TOKEN:-}
+      CLAUDE_EXTENSION_DIR: ${CLAUDE_EXTENSION_DIR:-}
+      WORKER_ID: worker-01
+      WORKER_NAME: Worker 01
+      NOVNC_PUBLIC_URL: http://localhost:6081
+    volumes:
+      - worker01-profile:/data/profile
+      - worker01-data:/data/work
+    mem_limit: ${WORKER_MEM_LIMIT:-2g}
+    cpus: ${WORKER_CPUS:-1.0}
+
+  worker-02:
+    <<: *worker
+    container_name: kick-worker-02
+    environment:
+      DISPLAY: ":99"
+      CONTROLLER_URL: http://controller:8000
+      REDIS_URL: redis://redis:6379/0
+      KICK_BASE_URL: ${KICK_BASE_URL:-https://kick.com}
+      SCREEN_WIDTH: ${SCREEN_WIDTH:-1920}
+      SCREEN_HEIGHT: ${SCREEN_HEIGHT:-1080}
+      API_TOKEN: ${API_TOKEN:-}
+      CLAUDE_EXTENSION_DIR: ${CLAUDE_EXTENSION_DIR:-}
+      WORKER_ID: worker-02
+      WORKER_NAME: Worker 02
+      NOVNC_PUBLIC_URL: http://localhost:6082
+    volumes:
+      - worker02-profile:/data/profile
+      - worker02-data:/data/work
+    mem_limit: ${WORKER_MEM_LIMIT:-2g}
+    cpus: ${WORKER_CPUS:-1.0}
+
+  worker-03:
+    <<: *worker
+    container_name: kick-worker-03
+    environment:
+      DISPLAY: ":99"
+      CONTROLLER_URL: http://controller:8000
+      REDIS_URL: redis://redis:6379/0
+      KICK_BASE_URL: ${KICK_BASE_URL:-https://kick.com}
+      SCREEN_WIDTH: ${SCREEN_WIDTH:-1920}
+      SCREEN_HEIGHT: ${SCREEN_HEIGHT:-1080}
+      API_TOKEN: ${API_TOKEN:-}
+      CLAUDE_EXTENSION_DIR: ${CLAUDE_EXTENSION_DIR:-}
+      WORKER_ID: worker-03
+      WORKER_NAME: Worker 03
+      NOVNC_PUBLIC_URL: http://localhost:6083
+    volumes:
+      - worker03-profile:/data/profile
+      - worker03-data:/data/work
+    mem_limit: ${WORKER_MEM_LIMIT:-2g}
+    cpus: ${WORKER_CPUS:-1.0}
+
+volumes:
+  postgres-data:
+  redis-data:
+  worker01-profile:
+  worker01-data:
+  worker02-profile:
+  worker02-data:
+  worker03-profile:
+  worker03-data:
+
+networks:
+  fleet:
+    driver: bridge

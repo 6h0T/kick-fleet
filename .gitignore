@@ -1,0 +1,17 @@
+.env
+.venv
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+node_modules/
+.next/
+out/
+dist/
+*.log
+.DS_Store
+data/
+profiles/
+.idea/
+.vscode/
+apps/dashboard/tsconfig.tsbuildinfo

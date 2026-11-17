@@ -1,0 +1,37 @@
+services:
+  postgres:
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+
+  redis:
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+
+  controller:
+    ports:
+      - "${CONTROLLER_PORT:-8000}:8000"
+
+  dashboard:
+    ports:
+      - "${DASHBOARD_PORT:-3000}:3000"
+
+  worker-01:
+    ports:
+      - "6081:6080"
+      - "5901:5900"
+    environment:
+      NOVNC_PUBLIC_URL: http://localhost:6081
+
+  worker-02:
+    ports:
+      - "6082:6080"
+      - "5902:5900"
+    environment:
+      NOVNC_PUBLIC_URL: http://localhost:6082
+
+  worker-03:
+    ports:
+      - "6083:6080"
+      - "5903:5900"
+    environment:
+      NOVNC_PUBLIC_URL: http://localhost:6083

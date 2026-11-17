@@ -1,0 +1,29 @@
+FROM node:22-alpine AS deps
+WORKDIR /app
+COPY apps/dashboard/package.json apps/dashboard/.npmrc ./
+RUN npm install
+
+FROM node:22-alpine AS build
+WORKDIR /app
+ARG NEXT_PUBLIC_CONTROLLER_URL=
+ARG NEXT_PUBLIC_WS_URL=
+ENV NEXT_PUBLIC_CONTROLLER_URL=$NEXT_PUBLIC_CONTROLLER_URL \
+    NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL \
+    CONTROLLER_INTERNAL_URL=http://controller:8000 \
+    NEXT_TELEMETRY_DISABLED=1
+COPY --from=deps /app/node_modules ./node_modules
+COPY apps/dashboard/ ./
+RUN npm run build
+
+FROM node:22-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=3000 \
+    HOSTNAME=0.0.0.0 \
+    CONTROLLER_INTERNAL_URL=http://controller:8000
+COPY --from=build /app/.next/standalone ./
+COPY --from=build /app/.next/static ./.next/static
+COPY --from=build /app/public ./public
+EXPOSE 3000
+CMD ["node", "server.js"]
